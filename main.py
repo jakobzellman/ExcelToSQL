@@ -14,7 +14,7 @@ db = create_engine(conn_string)
 conn = db.connect()
 
 # read files in directory
-filelist = scandir(r'C:/Users/jakob/Documents/Python/ExcelToSQL_Indata/')
+filelist = scandir('C:/Users/jakob/Documents/Python/ExcelToSQL_Indata/')
 
 # create lists for valid, error and skipped files
 valid_files = []
