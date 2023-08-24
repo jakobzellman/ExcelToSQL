@@ -6,10 +6,12 @@
 
 from os import scandir
 import pandas as pd
+import psycopg2
 from sqlalchemy import create_engine
 
 # postgresql connection string
 conn_string = 'postgresql://postgres:pumperpw@localhost/OD_Dev'
+schema_name = 'public'
 db = create_engine(conn_string)
 conn = db.connect()
 
@@ -20,6 +22,7 @@ filelist = scandir('C:/Users/jakob/Documents/Python/ExcelToSQL_Indata/')
 valid_files = []
 error_files = []
 skipped_files = []
+
 
 # filter out non-excel files and temp files
 for file in filelist:
@@ -39,21 +42,52 @@ for xl_file in valid_files:
     df = pd.read_excel(file_dir)
 
     # add id and timestamp columns
-    idval = df.index + 1
-    df.insert(0, 'Id', idval)
+    id_val = df.index + 1
+    df.insert(0, 'Id', id_val)
     df['Timestamp'] = pd.Timestamp.now()
 
     # create table name from filename
     tbl_name = xl_file.replace('.xlsx', '')
     print(f"Populating/creating table {tbl_name} in database...")
 
-    # populate table
-    try:
-        df.to_sql(tbl_name, con=conn, if_exists='replace', index=False)
-        print(f"Table {tbl_name} populated/created successfully.", u'\u2713')
-    except:
-        print(f"Table {tbl_name} encountered an error while trying to populate it.")
-        error_files.append(xl_file)
+    dataframe_columns = list(df.columns.values)
+
+    conn_select = psycopg2.connect(conn_string)
+    conn_select.autocommit = True
+    cursor = conn_select.cursor()
+    sql1 = f'''SELECT *
+            FROM information_schema.columns
+            WHERE table_schema = '{schema_name}'
+            AND table_name   = '{tbl_name}';'''
+    cursor.execute(sql1)
+
+    table_headers = []
+    for i in cursor.fetchall():
+        table_headers.append(i[3])
+
+    print(table_headers)
+    print(len(table_headers))
+    print(len(dataframe_columns))
+    if dataframe_columns == table_headers:
+        print('alike')
+    else:
+        print('not alike')
+    quit()
+
+    if dataframe_columns != table_headers:
+        sql_log = f'''INSERT INTO {schema_name}.log (timestamp, {table_name}, error)
+
+        # populate table
+
+        try:
+            df.to_sql(tbl_name, con=conn, if_exists='replace', index=False)
+            print(f"Table {tbl_name} populated/created successfully.", u'\u2713')
+        except:
+            print(f"Table {tbl_name} encountered an error while trying to populate it.")
+            error_files.append(xl_file)
+    else:
+
+
 
     print('_' * 100)
 
