@@ -1,4 +1,4 @@
-# ExcelToSQL v1.0
+# ExcelToSQL v1.1
 # script to populate postgresql database with excel-files
 # overwrites existing tables with same name
 # make sure to enable slowly changing dimensions in data warehouse to keep history
@@ -8,6 +8,10 @@ from os import scandir
 import pandas as pd
 import psycopg2
 from sqlalchemy import create_engine
+from datetime import datetime
+
+# enable logging
+logging_enabled = False
 
 # postgresql connection string
 conn_string = 'postgresql://postgres:pumperpw@localhost/OD_Dev'
@@ -22,7 +26,6 @@ filelist = scandir('C:/Users/jakob/Documents/Python/ExcelToSQL_Indata/')
 valid_files = []
 error_files = []
 skipped_files = []
-
 
 # filter out non-excel files and temp files
 for file in filelist:
@@ -52,6 +55,7 @@ for xl_file in valid_files:
 
     dataframe_columns = list(df.columns.values)
 
+    # check if table exists
     conn_select = psycopg2.connect(conn_string)
     conn_select.autocommit = True
     cursor = conn_select.cursor()
@@ -65,30 +69,30 @@ for xl_file in valid_files:
     for i in cursor.fetchall():
         table_headers.append(i[3])
 
-    print(table_headers)
-    print(len(table_headers))
-    print(len(dataframe_columns))
-    if dataframe_columns == table_headers:
-        print('alike')
-    else:
-        print('not alike')
-    quit()
+    insert_time = datetime.now()
 
-    if dataframe_columns != table_headers:
-        sql_log = f'''INSERT INTO {schema_name}.log (timestamp, {table_name}, error)
+    # populate table
+    try:
+        df.to_sql(tbl_name, con=conn, if_exists='replace', index=False)
+        print(f"Table {tbl_name} populated/created successfully.", u'\u2713')
+        if dataframe_columns != table_headers:
+            sql_log = f'''INSERT INTO {schema_name}.runlog (timestamp, errorflag, message, tablename)
+            values ('{insert_time}', 1, 
+            'Source table and Excel file's columns do not match, table columns are {table_headers}
+            while excel file contains {dataframe_columns}. 
+            Table overwritten with new column values.', '{tbl_name}')'''
+        else:
+            sql_log = f'''INSERT INTO {schema_name}.runlog (timestamp, errorflag, message, tablename)
+                        values ('{insert_time}', 0, 'Table successfully updated.', '{tbl_name}')'''
 
-        # populate table
+    except:
+        print(f"Table {tbl_name} encountered an error while trying to populate it.")
+        sql_log = f'''INSERT INTO {schema_name}.runlog (timestamp, errorflag, message, tablename)
+            values ('{insert_time}', 1, 'File could not be imported.', '{tbl_name}')'''
+        error_files.append(xl_file)
 
-        try:
-            df.to_sql(tbl_name, con=conn, if_exists='replace', index=False)
-            print(f"Table {tbl_name} populated/created successfully.", u'\u2713')
-        except:
-            print(f"Table {tbl_name} encountered an error while trying to populate it.")
-            error_files.append(xl_file)
-    else:
-
-
-
+    if logging_enabled:
+        cursor.execute(sql_log)
     print('_' * 100)
 
 # close connection
@@ -99,7 +103,7 @@ if len(error_files) == 0:
     print(f"Script ended. No errors discovered.")
 else:
     print(f"Script ended. Error discovered in files: {error_files}")
-print('_'*100)
+print('_' * 100)
 print(f'Files opened while script was running: {skipped_files}')
 
 # move files to archive
