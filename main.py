@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from datetime import datetime
 
 # enable logging
-logging_enabled = False
+logging_enabled = True
 
 # postgresql connection string
 conn_string = 'postgresql://postgres:pumperpw@localhost/OD_Dev'
